@@ -24,7 +24,7 @@ Hệ thống Giám sát Công nghiệp (Industrial Monitor) sử dụng vi đi�
 ## 3. PHÂN CÔNG CÔNG VIỆC (TASK BREAKDOWN)
 
 ### 📌 TASK 1: Xây dựng Lớp bọc Phần cứng (Board Support Package - BSP)
-*   **Người phụ trách:** [Điền tên thành viên]
+*   **Người phụ trách:** 
 *   **File làm việc:** `app/inc/bsp_hw.h` và `app/src/bsp_hw.c`
 *   **Mục tiêu:** Cách ly toàn bộ thư viện HAL (Hardware Abstraction Layer) khỏi tầng thuật toán. Tầng trên chỉ gọi hàm giao tiếp, không quan tâm chip chạy như thế nào.
 *   **Yêu cầu chi tiết:**
@@ -34,7 +34,7 @@ Hệ thống Giám sát Công nghiệp (Industrial Monitor) sử dụng vi đi�
     *   **Servo Motor:** Viết hàm `BSP_SetServoAngle(uint8_t angle)` thực hiện tính toán và ghi giá trị vào thanh ghi CCR của Timer 4 để băm xung PWM.
 
 ### 📌 TASK 2: Xử lý Giao tiếp Mạng & Hàng đợi Dữ liệu (Comms & Buffer)
-*   **Người phụ trách:** [Điền tên thành viên]
+*   **Người phụ trách:** 
 *   **File làm việc:** `Core/Src/stm32f1xx_it.c` (Phần ngắt UART) và `app/src/app_main.c`
 *   **Mục tiêu:** Nhận lệnh điều khiển (AT Commands) từ ESP8266 an toàn, không làm ngắt quãng hệ thống.
 *   **Yêu cầu chi tiết:**
@@ -43,7 +43,7 @@ Hệ thống Giám sát Công nghiệp (Industrial Monitor) sử dụng vi đi�
     *   *Lưu ý:* Xử lý đẩy dữ liệu trong ngắt (ISR) phải cực kỳ ngắn gọn (chỉ dùng hàm Push $O(1)$), không dùng các hàm delay hay in printf trong ngắt.
 
 ### 📌 TASK 3: Lập trình Luồng Điều khiển Trung tâm (State Machine Logic)
-*   **Người phụ trách:** [Tên Tech Lead / Thành viên]
+*   **Người phụ trách:** 
 *   **File làm việc:** `app/inc/app_main.h` và `app/src/app_main.c`
 *   **Mục tiêu:** Ráp nối phần cứng và truyền thông lại với nhau thông qua bộ não Active Object.
 *   **Yêu cầu chi tiết:**
