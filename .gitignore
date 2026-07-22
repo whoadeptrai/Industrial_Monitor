@@ -1,0 +1,36 @@
+# 1. Thư mục và file sinh ra trong quá trình Build (CỰC KỲ QUAN TRỌNG)
+build/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+*.ninja
+.ninja_*
+
+# 2. File cấu hình nội bộ của máy cá nhân (Không được đẩy lên)
+compile_commands.json
+
+# 3. Rác của IDE Cursor / VS Code và Linter Clangd
+.vscode/
+.clangd/
+.cache/
+*.code-workspace
+
+# 4. File nhị phân và object (Phòng hờ rớt ra ngoài thư mục build)
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+*.d
+*.a
+*.out
+
+# 5. File tạm của hệ điều hành và STM32CubeMX
+Thumbs.db
+.DS_Store
+*.bak
+*.tmp
