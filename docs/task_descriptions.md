@@ -55,4 +55,3 @@ Hệ thống Giám sát Công nghiệp (Industrial Monitor) sử dụng vi đi�
         *   `State_Manual_Control`: Điều khiển Servo trực tiếp bằng tọa độ Joystick.
 
 ---
-*Mọi thắc mắc về luồng hệ thống hoặc bị lỗi môi trường Build, vui lòng liên hệ trực tiếp Tech Lead trước khi tự ý sửa cấu hình.*
