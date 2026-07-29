@@ -16,7 +16,9 @@ typedef enum {
     TEMP_HIGH_SIG,
     JOYSTICK_MOVED_SIG,
     MODE_SWITCH_SIG,
-    RESET_SIG
+    RESET_SIG,
+
+    UART_RX_SIG     // tín hiệu nhận của uart
 } Signal;
 
 /* --- 2. CẤU TRÚC SỰ KIỆN (EVENT) --- */
