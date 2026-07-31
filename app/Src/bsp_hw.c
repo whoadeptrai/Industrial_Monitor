@@ -1,9 +1,12 @@
 #include "bsp_hw.h"
 #include "main.h"
+#include "stm32f103xb.h"
 #include "stm32f1xx_hal_adc.h"
 #include "stm32f1xx_hal_def.h"
 #include "stm32f1xx_hal_gpio.h"
+#include "stm32f1xx_hal_uart.h"
 #include <stdint.h>
+#include <app_main.h>
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim3;
 
@@ -136,3 +139,12 @@ bool BSP_DHT11_Read(uint8_t* temp, uint8_t* hum){
     } else return false;
 
 }
+
+extern UART_HandleTypeDef huart1;
+extern uint8_t rx_byte;
+void BSP_UART_Start_IT(void){
+    HAL_UART_Receive_IT(&huart1, &rx_byte, sizeof(rx_byte));
+}
+
+
+

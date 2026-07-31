@@ -10,6 +10,10 @@ typedef enum {
     ENTRY_SIG,      // Vừa bước vào State
     EXIT_SIG,       // Sắp thoát khỏi State
     
+
+    SIG_UART_RX_BYTE,
+    SIG_WIFI_CONNECTED,
+
     // --- Các tín hiệu hệ thống của dự án ---
     FIRE_DETECTED_SIG,
     GAS_DETECTED_SIG,

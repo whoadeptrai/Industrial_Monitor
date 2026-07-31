@@ -19,3 +19,7 @@ void delay_us(uint16_t us);
 
 void BSP_DHT11_Start(void);
 bool BSP_DHT11_Read(uint8_t* temp, uint8_t* hum);
+
+void BSP_UART_Start_IT(void);
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);

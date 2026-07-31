@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "micro_ao.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,11 +56,12 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+/* USER CODE BEGIN EV */
 extern DMA_HandleTypeDef hdma_adc1;
 extern DMA_HandleTypeDef hdma_usart1_tx;
 extern UART_HandleTypeDef huart1;
-/* USER CODE BEGIN EV */
-
+extern Active App_AO;
+uint8_t rx_byte;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -243,5 +245,17 @@ void USART1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART1) {
+      Event evt;
+      evt.sig = SIG_UART_RX_BYTE;
+      
+      evt.param = rx_byte;      
+
+      Active_post(&App_AO, evt); 
+
+      HAL_UART_Receive_IT(huart, &rx_byte, sizeof(rx_byte));
+  }
+}
 
 /* USER CODE END 1 */
