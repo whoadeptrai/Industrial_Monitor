@@ -1,25 +1,38 @@
-#include "bsp_hw.h"
 #include "main.h"
-#include "stm32f103xb.h"
-#include "stm32f1xx_hal_adc.h"
-#include "stm32f1xx_hal_def.h"
-#include "stm32f1xx_hal_gpio.h"
-#include "stm32f1xx_hal_uart.h"
+#include <stdbool.h>
 #include <stdint.h>
-#include <app_main.h>
+#include "bsp_hw.h"
 extern TIM_HandleTypeDef htim4;
 extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim2;
 
-Sensor_Status BSP_GetFireStatus(void){
-    if (HAL_GPIO_ReadPin(FIRE_SENSOR_GPIO_Port, FIRE_SENSOR_Pin) == GPIO_PIN_SET){
-        return ON;
-    } else return OFF;
+#define DWT_CTRL    (*(volatile uint32_t *)0xE0001000)
+#define CYCCNTENA   (1<<0)
+#define DWT_CYCCNT  (*(volatile uint32_t *)0xE0001004)
+#define DEMCR       (*(volatile uint32_t *)0xE000EDFC)
+#define TRCENA      (1<<24)
+
+static bool dwt_initialized = false;
+
+static void DWT_Init(void) {
+    if (!dwt_initialized) {
+        DEMCR |= TRCENA;
+        DWT_CTRL |= CYCCNTENA;
+        DWT_CYCCNT = 0;
+        dwt_initialized = true;
+    }
 }
 
-Sensor_Status BSP_GetGasStatus(void){
-    if (HAL_GPIO_ReadPin(GAS_SENSOR_GPIO_Port, GAS_SENSOR_Pin) == GPIO_PIN_SET){
-        return ON;
-    } else return OFF;
+bool BSP_GetFireStatus(void){
+    if (HAL_GPIO_ReadPin(FIRE_SENSOR_GPIO_Port, FIRE_SENSOR_Pin) == GPIO_PIN_RESET){
+        return true;
+    } else return false;
+}
+
+bool BSP_GetGasStatus(void){
+    if (HAL_GPIO_ReadPin(GAS_SENSOR_GPIO_Port, GAS_SENSOR_Pin) == GPIO_PIN_RESET){
+        return true;
+    } else return false;
 }
 
 void BSP_SetServoAngle(uint8_t angle){
@@ -50,100 +63,118 @@ void BSP_GetJoystickXY(int8_t* x, int8_t* y){
     if (y != NULL) *y = percent_y;
 }
 
-void delay_us(uint16_t us){
-    __HAL_TIM_SET_COUNTER(&htim3, 0);
-    HAL_TIM_Base_Start(&htim3);
-    while(__HAL_TIM_GET_COUNTER(&htim3) < us){
-
-    }
-    HAL_TIM_Base_Stop(&htim3);
+void Delay_us(uint16_t us){
+    DWT_Init();
+    uint32_t startTick = DWT_CYCCNT;
+    uint32_t delayTicks = us * (SystemCoreClock / 1000000); 
+    while ((DWT_CYCCNT - startTick) < delayTicks);
 }
 
-void BSP_DHT11_Start(void){
+
+static void DHT11_Set_Pin_Dir(uint32_t Mode) {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    GPIO_InitStruct.Pin = DHT11_PIN_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-
+    GPIO_InitStruct.Pin = DHT11_PIN_Pin; 
+    GPIO_InitStruct.Mode = Mode;
+    GPIO_InitStruct.Pull = (Mode == GPIO_MODE_INPUT) ? GPIO_PULLUP : GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(DHT11_PIN_GPIO_Port, &GPIO_InitStruct);
+}
 
+uint8_t BSP_ReadDHT11(uint8_t* temp, uint8_t* hum){
+    uint8_t data[5] = {0};
+    uint32_t timeout;
+
+    // 1. Gửi tín hiệu Start
+    DHT11_Set_Pin_Dir(GPIO_MODE_OUTPUT_PP);
     HAL_GPIO_WritePin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin, GPIO_PIN_RESET);
-
-}
-
-bool BSP_DHT11_Read(uint8_t* temp, uint8_t* hum){
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pin = DHT11_PIN_Pin;
-
-    HAL_GPIO_Init(DHT11_PIN_GPIO_Port, &GPIO_InitStruct);
-
-    uint8_t time_out = 0;
-    while(HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_RESET ){
-        delay_us(1);
-        time_out++;
-        if(time_out > 100) return false;
-    }
-    time_out = 0;
-    while(HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET ){
-        delay_us(1);
-        time_out++;
-        if(time_out > 100) return false;
+    HAL_Delay(18); 
+    
+    HAL_GPIO_WritePin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin, GPIO_PIN_SET);
+    Delay_us(30);  
+    
+    // Đổi sang chế độ Input
+    DHT11_Set_Pin_Dir(GPIO_MODE_INPUT);
+    
+    timeout = 0;
+    while (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET) {
+        Delay_us(1); timeout++;
+        if (timeout > 100) return 0; 
     }
     
-    uint8_t data[5] = {0};
-
-    // 1. Vòng lặp đếm Byte (5 hộp)
-    for (uint8_t i = 0; i < 5; i++) {
-
-        // 2. Vòng lặp đếm Bit (8 mảnh vỡ)
-        for (uint8_t j = 0; j < 8; j++) {
-        
-            // Bước A: Chờ qua pha LOW (Khoảng 50us)
-            // Dùng 1 vòng while(đọc chân == RESET) có timeout y chang phân cảnh 2
-            time_out = 0;
-            while(HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_RESET ){
-                delay_us(1);
-                time_out++;
-                if(time_out > 100) return false;
+    timeout = 0;
+    while (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_RESET) {
+        Delay_us(1); timeout++;
+        if (timeout > 100) return 0;
+    }
+    
+    timeout = 0;
+    while (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET) {
+        Delay_us(1); timeout++;
+        if (timeout > 100) return 0;
+    }
+    
+    // 3. Đọc 40 bits
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 8; j++) {
+            timeout = 0;
+            while (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_RESET) {
+                Delay_us(1); timeout++;
+                if (timeout > 100) return 0;
             }
-            // Bước B: Vừa thoát LOW lên HIGH xong -> delay_us(40);
-            delay_us(40);
-            // Bước C: Dọn chỗ cho bit mới vào mảng
-            data[i] = data[i] << 1; 
-        
-            // Bước D: Mở mắt ra chốt hạ bit 0 hay bit 1
-            if (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET) {
-                // Nếu 40us rồi mà nó vẫn HIGH -> Đây là xung 70us -> Chốt bit 1
-                data[i] = data[i] | 1; 
             
-                // CỰC KỲ QUAN TRỌNG: Vì nó là xung dài, m phải dùng thêm 1 vòng while(đọc chân == SET)
-                // (kèm timeout) ở đây để chờ nó rớt xuống LOW, nếu không vòng lặp tiếp theo sẽ đọc sai.
-                time_out = 0;
-                while(HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET ){
-                    delay_us(1);
-                    time_out++;
-                    if(time_out > 100) return false;
+            Delay_us(40); 
+            
+            if (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET) {
+                data[i] |= (1 << (7 - j)); 
+                timeout = 0;
+                while (HAL_GPIO_ReadPin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin) == GPIO_PIN_SET) {
+                    Delay_us(1); timeout++;
+                    if (timeout > 100) return 0;
                 }
-            }   
-            // (Nếu nó là LOW rồi thì m không cần làm gì, vì lệnh << 1 ở Bước C đã mặc định đuôi nó là 0 rồi).
+            } else {
+                data[i] &= ~(1 << (7 - j));
+            }
         }
     }
-
-    if((uint8_t)(data[0] + data[1] + data[2] + data[3] == data[4])){
+    
+    if (data[4] == (uint8_t)(data[0] + data[1] + data[2] + data[3])) {
         *hum = data[0];
         *temp = data[2];
-        return true;
-    } else return false;
+        return 1;
+    }
+    
+    return 0;
 
 }
 
-extern UART_HandleTypeDef huart1;
-extern uint8_t rx_byte;
-void BSP_UART_Start_IT(void){
-    HAL_UART_Receive_IT(&huart1, &rx_byte, sizeof(rx_byte));
+void BSP_Pump_Start(void){
+    HAL_GPIO_WritePin(PUMP_RELAYB15_GPIO_Port, PUMP_RELAYB15_Pin, GPIO_PIN_SET);
+}
+void BSP_Pump_Stop(void){
+    HAL_GPIO_WritePin(PUMP_RELAYB15_GPIO_Port, PUMP_RELAYB15_Pin, GPIO_PIN_RESET);
+}
+void BSP_Buzzer_On(void){
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
+}
+void BSP_Buzzer_Off(void){
+    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
+}
+void BSP_LED_Control(uint8_t color, uint8_t state){
+    GPIO_PinState hal_state = (state == LED_ON) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    switch(color){
+        case LED_COLOR_RED:
+            HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, hal_state);
+            break;
+        case LED_COLOR_GREEN:
+            HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, hal_state);
+            break;
+        case LED_COLOR_YELLOW:
+            HAL_GPIO_WritePin(LED_YELLOW_GPIO_Port, LED_YELLOW_Pin, hal_state);
+            break;
+        default:
+            break; 
+    }
 }
 
 

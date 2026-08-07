@@ -1,13 +1,13 @@
+#ifndef BSP_HW_H
+#define BSP_HW_H
+
 #include "main.h"
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum {
-    OFF = 0,
-    ON = 1
-} Sensor_Status;
-Sensor_Status BSP_GetFireStatus(void);
-Sensor_Status BSP_GetGasStatus(void);
+
+bool BSP_GetFireStatus(void);
+bool BSP_GetGasStatus(void);
 
 void BSP_SetServoAngle(uint8_t angle);
 
@@ -15,11 +15,24 @@ void BSP_Init(void);
 
 void BSP_GetJoystickXY(int8_t* x, int8_t* y);
 
-void delay_us(uint16_t us);
+void Delay_us(uint16_t us);
 
-void BSP_DHT11_Start(void);
-bool BSP_DHT11_Read(uint8_t* temp, uint8_t* hum);
+uint8_t BSP_ReadDHT11(uint8_t *temp, uint8_t *hum);
 
-void BSP_UART_Start_IT(void);
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
+
+#define LED_COLOR_RED    0
+#define LED_COLOR_GREEN  1
+#define LED_COLOR_YELLOW 2
+
+#define LED_ON           1
+#define LED_OFF          0
+
+// Nguyên mẫu hàm Đầu ra (Outputs)
+void BSP_Pump_Start(void);
+void BSP_Pump_Stop(void);
+void BSP_LED_Control(uint8_t color, uint8_t state);
+void BSP_Buzzer_On(void);
+void BSP_Buzzer_Off(void);
+
+#endif
