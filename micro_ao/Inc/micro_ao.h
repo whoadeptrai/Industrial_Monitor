@@ -17,6 +17,8 @@ typedef enum {
     JOYSTICK_MOVED_SIG,
     MODE_SWITCH_SIG,
     RESET_SIG,
+    SIG_UART_RX_BYTE,
+    
 
     UART_RX_SIG     // tín hiệu nhận của uart
 } Signal;

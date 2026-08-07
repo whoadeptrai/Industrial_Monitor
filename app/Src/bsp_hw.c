@@ -148,10 +148,10 @@ uint8_t BSP_ReadDHT11(uint8_t* temp, uint8_t* hum){
 }
 
 void BSP_Pump_Start(void){
-    HAL_GPIO_WritePin(PUMP_RELAYB15_GPIO_Port, PUMP_RELAYB15_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(PUMP_RELAY_GPIO_Port, PUMP_RELAY_Pin, GPIO_PIN_SET);
 }
 void BSP_Pump_Stop(void){
-    HAL_GPIO_WritePin(PUMP_RELAYB15_GPIO_Port, PUMP_RELAYB15_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(PUMP_RELAY_GPIO_Port, PUMP_RELAY_Pin, GPIO_PIN_RESET);
 }
 void BSP_Buzzer_On(void){
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);

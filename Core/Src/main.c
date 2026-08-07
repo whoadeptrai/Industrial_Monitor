@@ -26,7 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "app_main.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +48,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+extern uint8_t rx_byte;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -94,14 +95,57 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM4_Init();
   MX_USART1_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  BSP_Init();
+  App_AO_Init();
+  Active_init(&App_AO);
+  HAL_UART_Receive_IT(&huart1, &rx_byte, 1); 
 
+  // 3. Khai báo biến lưu trạng thái cũ để bắt sườn (Fix Bug 2)
+  bool last_fire = false;
+  bool last_gas = false;
+  uint32_t last_poll_time = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-  {
+  { if (HAL_GetTick() - last_poll_time >= 50) {
+    last_poll_time = HAL_GetTick(); // Cập nhật lại mốc thời gian
+
+    // Quét cảm biến Lửa (Bắt sườn LÊN)
+    bool current_fire = BSP_GetFireStatus();
+    if (current_fire == true && last_fire == false) { 
+        Event e; e.sig = FIRE_DETECTED_SIG;
+        Active_post(&App_AO, e); // Chỉ ném đúng 1 phiếu duy nhất lúc lửa mới bùng lên!
+    }
+    last_fire = current_fire; // Lưu lại để vòng sau so sánh
+
+    // Quét cảm biến Gas (Bắt sườn LÊN)
+    bool current_gas = BSP_GetGasStatus();
+    if (current_gas == true && last_gas == false) {
+        Event e; e.sig = GAS_DETECTED_SIG;
+        Active_post(&App_AO, e);
+    }
+    last_gas = current_gas;
+
+    static int8_t last_joy_x = 0; 
+      int8_t current_joy_x, current_joy_y;
+      BSP_GetJoystickXY(&current_joy_x, &current_joy_y);
+      
+      if (current_joy_x != last_joy_x) { 
+          Event e; 
+          e.sig = JOYSTICK_MOVED_SIG;
+          
+          e.param = (uint32_t)((current_joy_x + 100) * 180 / 200); 
+          Active_post(&App_AO, e);
+          
+          last_joy_x = current_joy_x;
+      }
+  }
+// 3. Giám đốc xử lý công việc trong rổ (Đã có sẵn)
+Active_dispatch(&App_AO);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
