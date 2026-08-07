@@ -22,6 +22,8 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_main.h" 
+#include "micro_ao.h" // Chứa định nghĩa Event và Active_post
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -243,5 +245,28 @@ void USART1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+
+
+// Giả sử State Machine của dự án tên là 'App_AO' (được khai báo bên app_main.c)
+extern Active App_AO; // nằm ở app_main.c
+// Biến toàn cục hứng byte
+uint8_t rx_byte; 
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        Event evt;
+        evt.sig = UART_RX_SIG;   // tín hiệu nhận 
+        evt.param = rx_byte;     // thông tin nhận được
+
+        // truyền con trỏ bộ máy &App_AO, và truyền sự kiện evt
+        Active_post(&App_AO, evt);  // đưa dữ liệu nhận được vào hàng đợi vòng
+
+        // chờ nhận byte tiếp theo
+        HAL_UART_Receive_IT(huart, &rx_byte, 1);
+    }
+}
 
 /* USER CODE END 1 */
