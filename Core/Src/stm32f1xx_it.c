@@ -258,7 +258,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART1)
     {
         Event evt;
-        evt.sig = UART_RX_SIG;   // tín hiệu nhận 
+        evt.sig = SIG_UART_RX_BYTE;;   // tín hiệu nhận 
         evt.param = rx_byte;     // thông tin nhận được
 
         // truyền con trỏ bộ máy &App_AO, và truyền sự kiện evt

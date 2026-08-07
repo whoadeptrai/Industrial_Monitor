@@ -53,7 +53,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(DHT11_PIN_GPIO_Port, DHT11_PIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(PUMP_RELAY_GPIO_Port, PUMP_RELAY_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, PUMP_RELAY_Pin|LED_RED_Pin|LED_GREEN_Pin|LED_YELLOW_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : FIRE_SENSOR_Pin GAS_SENSOR_Pin */
   GPIO_InitStruct.Pin = FIRE_SENSOR_Pin|GAS_SENSOR_Pin;
@@ -68,12 +68,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DHT11_PIN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PUMP_RELAY_Pin */
-  GPIO_InitStruct.Pin = PUMP_RELAY_Pin;
+  /*Configure GPIO pins : PUMP_RELAY_Pin LED_RED_Pin LED_GREEN_Pin LED_YELLOW_Pin */
+  GPIO_InitStruct.Pin = PUMP_RELAY_Pin|LED_RED_Pin|LED_GREEN_Pin|LED_YELLOW_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(PUMP_RELAY_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SW_MODE_Pin BTN_RESET_Pin */
   GPIO_InitStruct.Pin = SW_MODE_Pin|BTN_RESET_Pin;
