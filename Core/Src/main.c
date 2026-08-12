@@ -26,7 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "app_main.h"     // Kéo App_AO và State_Idle vào đây
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +47,18 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+/* 
+ * Nằm ở stm32f1xx_it.c 
+ * Lý do: Hàm mồi ngắt UART lần đầu tiên trong main.c cần biết sẽ nhét byte thu được vào cái hộp nào. 
+ * rx_byte nằm ở file ngắt, ta phải dùng 'extern' để gọi nó sang đây mượn tạm.
+ */
+extern uint8_t rx_byte; 
 
+/* 
+ * Nằm ở usart.c 
+ * Lý do: Cần để truyền vào hàm mồi ngắt HAL_UART_Receive_IT
+ */
+extern UART_HandleTypeDef huart1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,7 +106,18 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  //
+  // Hàm Active_ctor (nằm ở micro_ao.c). Nó trỏ con trỏ state của App_AO về hàm State_Idle.
+  Active_ctor(&App_AO, State_Idle); 
+  
+  // Hàm Active_init (nằm ở micro_ao.c). Nó tự động gửi tín hiệu INIT_SIG và ENTRY_SIG để khởi động hệ thống.
+  Active_init(&App_AO);             
 
+  // 2. Mồi ngắt UART lần đầu tiên.
+  // Khi ESP8266 gửi 1 byte, chip sẽ nhảy vào ngắt HAL_UART_RxCpltCallback trong stm32f1xx_it.c
+  HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+
+  // TODO (Dành cho Task 1): Sau này ta sẽ gọi thêm các hàm Start DMA của ADC và Start PWM của Servo ở đây
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,6 +127,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // Hàm Active_dispatch (nằm ở micro_ao.c). 
+    // Lý do đặt ở đây: Nó sẽ liên tục móc sự kiện từ Hàng đợi (Ring Buffer) ra. 
+    // Nếu trong hàng đợi có sự kiện (ví dụ sự kiện UART_RX_SIG do ngắt nhét vào), 
+    // nó sẽ đẩy sự kiện đó vào hàm State_Idle để xử lý. Nếu hàng đợi trống, nó chạy lướt qua (Non-blocking).
+    Active_dispatch(&App_AO);
   }
   /* USER CODE END 3 */
 }
