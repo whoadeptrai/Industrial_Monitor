@@ -1,7 +1,7 @@
 
 #include "app_main.h"
-#include "bsp_hw.h"
 #include "micro_ao.h"
+#include <stdbool.h>
 #include <string.h> // Dùng cho hàm strstr
 #include <stdint.h>
 
@@ -44,7 +44,14 @@ static void ESP8266_ParseCommand(const char* cmd_str)
         evt.param = 0;
         Active_post(&App_AO, evt);   // báo cho hệ thống biết xì gas!
     }
-    // các case khác nếu có 
+    else if (strstr(cmd_str, "RESET_ALARM") != NULL) {
+        Event evt = { .sig = RESET_SIG, .param = 0 };
+        Active_post(&App_AO, evt); // Tắt còi, tắt bơm từ xa
+    }
+    else if (strstr(cmd_str, "SWITCH_MODE") != NULL) {
+        Event evt = { .sig = MODE_SWITCH_SIG, .param = 0 };
+        Active_post(&App_AO, evt); // Chuyển đổi Auto / Manual từ xa
+    }
 }
 
 
@@ -76,126 +83,113 @@ void App_Process_UART_Byte(uint8_t received_byte)
         rx_index++;
     }
 }
+
+void App_Send_Alert(const char* message) {
+    // huart1 là biến toàn cục của file main.c, ta dùng extern để gọi
+    extern UART_HandleTypeDef huart1; 
+    HAL_UART_Transmit(&huart1, (uint8_t*)message, strlen(message), 100);
+}
+
+static void State_IDLE(Active * const me, const Event * const e);
+static void State_Alarm(Active * const me, const Event * const e);
+static void State_Manual(Active * const me, const Event * const e);
+
 /* ====================================================================
- * 5. CÁC TRẠNG THÁI (STATE HANDLERS)
+ * LOGIC CÁC TRẠNG THÁI (STATE MACHINE)
  * ==================================================================== */
-/* 
- * Hàm: State_Idle
- * Chức năng: Trạng thái bình thường của hệ thống. Đứng đợi sự kiện mạng và cảm biến.
- */
-void State_Idle(Active * const me, const Event * const e)
-{
-    switch (e->sig)
-    {
+static void State_IDLE(Active * const me, const Event * const e) {
+    switch (e->sig) {
         case ENTRY_SIG:
-            // Sẽ chạy 1 lần duy nhất khi hệ thống vừa bước vào State_Idle
-            // TODO: In ra màn hình console (qua UART) là "System is Normal"
-
-            break;
-
-        case UART_RX_SIG:
-            /*
-             * lý do sử dụng: Tín hiệu này do ngắt HAL_UART_RxCpltCallback bắn ra mỗi khi nhận 1 byte.
-             * Ở file ngắt, ta đã ép byte nhận được vào e.param (evt.param = rx_byte).
-             * Vì vậy ở đây, ta lôi e->param ra, ép kiểu về uint8_t, và đưa vào hàm ghép chuỗi.
-             */
-            App_Process_UART_Byte((uint8_t)e->param);
-            break;
-
+            BSP_LED_Control(LED_COLOR_GREEN, LED_ON); 
+            return;
+            
         case FIRE_DETECTED_SIG:
-        case GAS_DETECTED_SIG:
-            /*
-             * lý do sử dụng: Tín hiệu này do hàm ESP8266_ParseCommand (nằm ngay phía trên của file này)
-             * bắn ra khi nó đọc được chữ "ALARM_FIRE" hoặc "ALARM_GAS" từ ESP8266.
-             * Khi nhận được, ta gọi hàm Active_tran (nằm ở micro_ao.c) để ép hệ thống 
-             * nhảy sang trạng thái báo động (State_Alarm).
-             */
+        case GAS_DETECTED_SIG: 
             Active_tran(me, State_Alarm);
-            break;
+            return;
             
         case MODE_SWITCH_SIG:
-            /*
-             * Chuyển sang chế độ thủ công (sẽ kích hoạt khi người dùng bấm nút)
-             */
-            Active_tran(me, State_Manual_Control);
-            break;
-
-        default:
-            break;
-    }
-}
-/* 
- * Hàm: State_Alarm
- * Chức năng: Chốt cửa (Servo), bật bơm (Pump), khóa mọi thao tác cho tới khi reset.
- */
-void State_Alarm(Active * const me, const Event * const e)
-{
-    switch (e->sig)
-    {
-        case ENTRY_SIG:
-            //Chạy 1 lần ngay khi vừa từ State_Idle nhảy sang đây.    
-            BSP_SetServoAngle(90); // Mở chốt cửa 90 độ cho người thoát hiểm
-            BSP_SetPump(true);     // Bật bơm chữa cháy
-            break;
-
-        case UART_RX_SIG:
-
-            //vẫn phải nhận UART để nhỡ ESP8266 có gửi lệnh RESET thì còn biết
-            App_Process_UART_Byte((uint8_t)e->param);
-            break;
-
-        case RESET_SIG:
-            /*
-             * Giả sử nút bấm hoặc lệnh từ web yêu cầu Reset->chuyển nó về lại State_Idle.
-             */
-            Active_tran(me, State_Idle);
-            break;
-
+            Active_tran(me, State_Manual); 
+            return;
+            
         case EXIT_SIG:
-             //Chạy 1 lần trước khi thoát khỏi State_Alarm để về Idle
-            BSP_SetServoAngle(0);  // Đóng chốt cửa lại
-            BSP_SetPump(false);    // Tắt bơm
-            break;
-
+            BSP_LED_Control(LED_COLOR_GREEN, LED_OFF); 
+            return;
+        
+        case SIG_UART_RX_BYTE:
+            App_Process_UART_Byte((uint8_t)e->param); 
+            return;
+            
         default:
-            // ignore mọi sự kiện khác (ví dụ phớt lờ Joystick khi đang có cháy)
-            break;
+            return;
     }
 }
-/* 
- * Hàm: State_Manual_Control
- * Chức năng: Cho phép người dùng dùng Joystick để điều khiển Servo.
- */
-void State_Manual_Control(Active * const me, const Event * const e)
-{
-    switch (e->sig)
-    {
-        case ENTRY_SIG:
-            // TODO: In ra màn hình "Manual Mode ON"
-            break;
 
+static void State_Manual(Active * const me, const Event * const e) {
+    switch (e->sig) {
+        case ENTRY_SIG:
+            BSP_LED_Control(LED_COLOR_YELLOW, LED_ON); 
+            return;
+            
         case JOYSTICK_MOVED_SIG:
-            /*
-             * Sẽ được gọi khi phát hiện Joystick thay đổi tọa độ
-             * Biến e->param sẽ chứa góc quay mới.
-             * TODO: Gọi BSP_SetServoAngle((uint8_t)e->param)
-             */
-            BSP_SetServoAngle((uint8_t)e->param);
-            break;
+            BSP_SetServoAngle(e->param); 
+            return;
             
         case MODE_SWITCH_SIG:
-            //nhấn nút lần nữa thì quay về Idle
-            Active_tran(me, State_Idle);
-            break;
+            Active_tran(me, State_IDLE); 
+            return;
 
-            //vẫn phải bắt tín hiệu cháy nổ, bởi vì đang ở chế độ thủ công mà có cháy
-            //thì vẫn phải nhảy sang Alarm ngay lập tức
         case FIRE_DETECTED_SIG:
-        case GAS_DETECTED_SIG:
+        case GAS_DETECTED_SIG: 
             Active_tran(me, State_Alarm);
-            break;
-
+            return;
+            
+        case EXIT_SIG:
+            BSP_LED_Control(LED_COLOR_YELLOW, LED_OFF); 
+            return;
+        
+        case SIG_UART_RX_BYTE:
+            App_Process_UART_Byte((uint8_t)e->param); 
+            return;
+            
         default:
-            break;
+            return;
     }
+}
+
+static void State_Alarm(Active * const me, const Event * const e) {
+    switch (e->sig) {
+        case ENTRY_SIG:
+            BSP_Buzzer_On();     
+            BSP_LED_Control(LED_COLOR_RED, LED_ON);    
+            BSP_Pump_Start();
+            BSP_SetServoAngle(0); // Chốt cửa ngăn cháy lan
+            App_Send_Alert("WARNING: FIRE_DETECTED\r\n"); // Báo lên Server!    
+            return;
+            
+        case RESET_SIG: 
+            if (BSP_GetFireStatus() == true || BSP_GetGasStatus() == true) {
+                return; 
+            }
+            Active_tran(me, State_IDLE); 
+            return;
+            
+        case EXIT_SIG:
+            BSP_Buzzer_Off();    
+            BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
+            BSP_Pump_Stop();     
+            return;
+            
+        case SIG_UART_RX_BYTE:
+            App_Process_UART_Byte((uint8_t)e->param); 
+            return;
+        
+            
+        default:
+            return;
+    }
+}
+
+void App_AO_Init(void){
+    Active_ctor(&App_AO, State_IDLE);
 }

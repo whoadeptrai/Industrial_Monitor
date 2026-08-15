@@ -252,13 +252,12 @@ void USART1_IRQHandler(void)
 extern Active App_AO; // nằm ở app_main.c
 // Biến toàn cục hứng byte
 uint8_t rx_byte; 
-
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1)
+    if (huart==&huart1)
     {
         Event evt;
-        evt.sig = UART_RX_SIG;   // tín hiệu nhận 
+        evt.sig = SIG_UART_RX_BYTE;  // tín hiệu nhận 
         evt.param = rx_byte;     // thông tin nhận được
 
         // truyền con trỏ bộ máy &App_AO, và truyền sự kiện evt

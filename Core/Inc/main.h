@@ -73,6 +73,12 @@ void Error_Handler(void);
 #define SW_MODE_GPIO_Port GPIOB
 #define BTN_RESET_Pin GPIO_PIN_2
 #define BTN_RESET_GPIO_Port GPIOB
+#define LED_RED_Pin GPIO_PIN_12
+#define LED_RED_GPIO_Port GPIOB
+#define LED_GREEN_Pin GPIO_PIN_13
+#define LED_GREEN_GPIO_Port GPIOB
+#define LED_YELLOW_Pin GPIO_PIN_14
+#define LED_YELLOW_GPIO_Port GPIOB
 #define SERVO_PWM_Pin GPIO_PIN_6
 #define SERVO_PWM_GPIO_Port GPIOB
 

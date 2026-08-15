@@ -26,7 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "app_main.h"     // Kéo App_AO và State_Idle vào đây
+#include "app_main.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,18 +48,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* 
- * Nằm ở stm32f1xx_it.c 
- * Lý do: Hàm mồi ngắt UART lần đầu tiên trong main.c cần biết sẽ nhét byte thu được vào cái hộp nào. 
- * rx_byte nằm ở file ngắt, ta phải dùng 'extern' để gọi nó sang đây mượn tạm.
- */
-extern uint8_t rx_byte; 
-
-/* 
- * Nằm ở usart.c 
- * Lý do: Cần để truyền vào hàm mồi ngắt HAL_UART_Receive_IT
- */
-extern UART_HandleTypeDef huart1;
+extern uint8_t rx_byte;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,27 +95,70 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM4_Init();
   MX_USART1_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  //
-  // Hàm Active_ctor (nằm ở micro_ao.c). Nó trỏ con trỏ state của App_AO về hàm State_Idle.
-  Active_ctor(&App_AO, State_Idle); 
-  
-  // Hàm Active_init (nằm ở micro_ao.c). Nó tự động gửi tín hiệu INIT_SIG và ENTRY_SIG để khởi động hệ thống.
-  Active_init(&App_AO);             
+  // Khai báo biến lưu trạng thái cũ để bắt sườn (Fix Bug 2)
+  bool last_fire = false;
+  bool last_gas = false;
+  uint32_t last_poll_time = 0;
+  uint32_t last_dht11_time = 0;
 
-  // 2. Mồi ngắt UART lần đầu tiên.
-  // Khi ESP8266 gửi 1 byte, chip sẽ nhảy vào ngắt HAL_UART_RxCpltCallback trong stm32f1xx_it.c
-  HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+  BSP_Init();
+  App_AO_Init();
+  Active_init(&App_AO);
+  HAL_UART_Receive_IT(&huart1, &rx_byte, 1); 
 
-  // TODO (Dành cho Task 1): Sau này ta sẽ gọi thêm các hàm Start DMA của ADC và Start PWM của Servo ở đây
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+  while (1){ 
+    if (HAL_GetTick() - last_poll_time >= 50) {
+    last_poll_time = HAL_GetTick(); // Cập nhật lại mốc thời gian
 
+    // Quét cảm biến Lửa (Bắt sườn LÊN)
+    bool current_fire = BSP_GetFireStatus();
+    if (current_fire == true && last_fire == false) { 
+        Event e; e.sig = FIRE_DETECTED_SIG;
+        Active_post(&App_AO, e); // Chỉ ném đúng 1 phiếu duy nhất lúc lửa mới bùng lên!
+    }
+    last_fire = current_fire; // Lưu lại để vòng sau so sánh
+
+    // Quét cảm biến Gas (Bắt sườn LÊN)
+    bool current_gas = BSP_GetGasStatus();
+    if (current_gas == true && last_gas == false) {
+        Event e; e.sig = GAS_DETECTED_SIG;
+        Active_post(&App_AO, e);
+    }
+    last_gas = current_gas;
+
+    static int8_t last_joy_x = 0; 
+      int8_t current_joy_x, current_joy_y;
+      BSP_GetJoystickXY(&current_joy_x, &current_joy_y);
+      
+      if (current_joy_x != last_joy_x) { 
+          Event e; 
+          e.sig = JOYSTICK_MOVED_SIG;
+          
+          e.param = (uint32_t)((current_joy_x + 100) * 180 / 200); 
+          Active_post(&App_AO, e);
+          
+          last_joy_x = current_joy_x;
+      }
+    }
+    if (HAL_GetTick() - last_dht11_time >= 2000) {
+          last_dht11_time = HAL_GetTick();
+          
+          uint8_t temp = 0, hum = 0;
+          if (BSP_ReadDHT11(&temp, &hum) == 1) { // Nếu đọc thành công
+              if (temp > 45) { // Ví dụ: nhiệt độ quá cao
+                  Event e;
+                  e.sig = TEMP_HIGH_SIG; // Tín hiệu đã được định nghĩa ở micro_ao.h
+                  e.param = temp;
+                  Active_post(&App_AO, e);
+              }
+          }
+    }
     /* USER CODE BEGIN 3 */
     // Hàm Active_dispatch (nằm ở micro_ao.c). 
     // Lý do đặt ở đây: Nó sẽ liên tục móc sự kiện từ Hàng đợi (Ring Buffer) ra. 

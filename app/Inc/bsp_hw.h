@@ -1,29 +1,38 @@
 #ifndef BSP_HW_H
 #define BSP_HW_H
 
-#include "main.h"    // Lấy định nghĩa chân GPIO (FIRE_SENSOR_Pin, SERVO_PWM_Pin...)
-#include <stdbool.h> // Hỗ trợ kiểu trả về true/false
+#include "main.h"
 #include <stdint.h>
+#include <stdbool.h>
 
-// --------------------------------------------------------
-// CÁC HÀM KHỞI TẠO VÀ ĐIỀU KHIỂN PHẦN CỨNG
-// --------------------------------------------------------
 
-// Khởi động các ngoại vi (DMA, PWM)
-void BSP_Init(void);
-
-// Đọc trạng thái cảm biến (Trùng khớp với Task 1)
 bool BSP_GetFireStatus(void);
 bool BSP_GetGasStatus(void);
 
-// Điều khiển cơ cấu chấp hành
 void BSP_SetServoAngle(uint8_t angle);
-void BSP_SetPump(bool state);
 
-// Đọc giá trị Joystick qua ADC + DMA
-void BSP_GetJoystickXY(uint16_t* x, uint16_t* y);
+void BSP_Init(void);
 
-// Đọc cảm biến nhiệt độ DHT11
-bool BSP_ReadDHT11(uint8_t* temp, uint8_t* hum);
+void BSP_GetJoystickXY(int8_t* x, int8_t* y);
 
-#endif /* BSP_HW_H */
+void Delay_us(uint16_t us);
+
+uint8_t BSP_ReadDHT11(uint8_t *temp, uint8_t *hum);
+
+
+
+#define LED_COLOR_RED    0
+#define LED_COLOR_GREEN  1
+#define LED_COLOR_YELLOW 2
+
+#define LED_ON           1
+#define LED_OFF          0
+
+// Nguyên mẫu hàm Đầu ra (Outputs)
+void BSP_Pump_Start(void);
+void BSP_Pump_Stop(void);
+void BSP_LED_Control(uint8_t color, uint8_t state);
+void BSP_Buzzer_On(void);
+void BSP_Buzzer_Off(void);
+
+#endif
