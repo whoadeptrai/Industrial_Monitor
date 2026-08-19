@@ -6,16 +6,16 @@
 #include <stdint.h>
 
 /* ====================================================================
- * 1. KHỞI TẠO BỘ NÃO (STATE MACHINE)
+ * KHỞI TẠO STATE MACHINE
  * ==================================================================== */
-// Đây là nơi cấp phát bộ nhớ thật sự cho App_AO (ative object)
+// đây là nơi cấp phát bộ nhớ thật sự cho App_AO (ative object)
 // File stm32f1xx_it.c sẽ gọi sang đây để xài ké biến này.
 
 Active App_AO; 
 
 
 /* ====================================================================
- * 2. CÁC BIẾN CỤC BỘ CHO BỘ ĐỆM (BUFFER)
+ * CÁC BIẾN CỤC BỘ CHO BỘ ĐỆM
  * ==================================================================== */
 #define MAX_CMD_LENGTH 64 //kích thước buffer chứa các ký tự đọc được
 static char rx_buffer[MAX_CMD_LENGTH]; //static khai báo các biến chỉ sử dụng trong file .c này -> tránh bị thay đổi bởi các file khác
@@ -23,9 +23,9 @@ static uint16_t rx_index = 0;
 
 
 /* ====================================================================
- * 3. HÀM PARSER: BÓC TÁCH LỆNH VÀ RA QUYẾT ĐỊNH
+ * HÀM PARSER BÓC TÁCH LỆNH VÀ RA QUYẾT ĐỊNH
  * ==================================================================== */
-// hàm này được gọi khi đã nhận đủ 1 câu lệnh từ ESP8266 (kết thúc bằng \n)
+//hàm này được gọi khi đã nhận đủ 1 câu lệnh từ ESP8266 (kết thúc bằng \n)
 static void ESP8266_ParseCommand(const char* cmd_str)
 {
     // tìm chữ "ALARM_FIRE" trong chuỗi nhận được
@@ -46,22 +46,21 @@ static void ESP8266_ParseCommand(const char* cmd_str)
     }
     else if (strstr(cmd_str, "RESET_ALARM") != NULL) {
         Event evt = { .sig = RESET_SIG, .param = 0 };
-        Active_post(&App_AO, evt); // Tắt còi, tắt bơm từ xa
+        Active_post(&App_AO, evt); // tắt còi, tắt bơm từ xa
     }
     else if (strstr(cmd_str, "SWITCH_MODE") != NULL) {
         Event evt = { .sig = MODE_SWITCH_SIG, .param = 0 };
-        Active_post(&App_AO, evt); // Chuyển đổi Auto / Manual từ xa
+        Active_post(&App_AO, evt); // chuyển đổi auto / manual từ xa
     }
 }
 
-
 /* ====================================================================
- * 4. HÀM GHÉP BYTE (GỌI TỪ STATE MACHINE HOẶC VÒNG LẶP CHÍNH)
+ * HÀM GHÉP BYTE (GỌI TỪ STATE MACHINE HOẶC VÒNG LẶP CHÍNH)
  * ==================================================================== */
 // hàm này có nhiệm vụ nhận từng byte lẻ tẻ do ngắt gửi tới và ghép thành chuỗi
 void App_Process_UART_Byte(uint8_t received_byte)
 {
-    // vượt quá kích thước buffer thì reset về 0
+    //vượt quá kích thước buffer thì reset về 0
     if (rx_index >= MAX_CMD_LENGTH - 1) 
         rx_index = 0; 
     
@@ -84,8 +83,8 @@ void App_Process_UART_Byte(uint8_t received_byte)
     }
 }
 
+//hàm gửi thông tin lên esp8266
 void App_Send_Alert(const char* message) {
-    // huart1 là biến toàn cục của file main.c, ta dùng extern để gọi
     extern UART_HandleTypeDef huart1; 
     HAL_UART_Transmit(&huart1, (uint8_t*)message, strlen(message), 100);
 }
@@ -95,14 +94,14 @@ static void State_Alarm(Active * const me, const Event * const e);
 static void State_Manual(Active * const me, const Event * const e);
 
 /* ====================================================================
- * LOGIC CÁC TRẠNG THÁI (STATE MACHINE)
+ * LOGIC STATE MACHINE
  * ==================================================================== */
 static void State_IDLE(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
-            BSP_LED_Control(LED_COLOR_GREEN, LED_ON); 
+            BSP_LED_Control(LED_COLOR_GREEN, LED_ON); //state idle thì led green sáng
             return;
-            
+        //gặp lửa hay gas thì qua state alarm
         case FIRE_DETECTED_SIG:
         case GAS_DETECTED_SIG: 
             Active_tran(me, State_Alarm);
@@ -116,7 +115,7 @@ static void State_IDLE(Active * const me, const Event * const e) {
             BSP_LED_Control(LED_COLOR_GREEN, LED_OFF); 
             return;
         
-        case SIG_UART_RX_BYTE:
+        case UART_RX_SIG: //dù ở state nào thì vẫn phải gửi thông báo nếu nhận được tín hiệu UART_RX_SIG
             App_Process_UART_Byte((uint8_t)e->param); 
             return;
             
@@ -126,6 +125,7 @@ static void State_IDLE(Active * const me, const Event * const e) {
 }
 
 static void State_Manual(Active * const me, const Event * const e) {
+    //state manual thì led yellow sáng
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_YELLOW, LED_ON); 
@@ -148,7 +148,7 @@ static void State_Manual(Active * const me, const Event * const e) {
             BSP_LED_Control(LED_COLOR_YELLOW, LED_OFF); 
             return;
         
-        case SIG_UART_RX_BYTE:
+        case UART_RX_SIG:
             App_Process_UART_Byte((uint8_t)e->param); 
             return;
             
@@ -158,29 +158,32 @@ static void State_Manual(Active * const me, const Event * const e) {
 }
 
 static void State_Alarm(Active * const me, const Event * const e) {
+    //state alarm thì led red sáng
     switch (e->sig) {
         case ENTRY_SIG:
+        //vừa vào state alarm thì bật còi, đèn đỏ, máy bơm, chốt cửa (servo) ngăn cháy lan và gửi tín hiệu cảnh báo lên server ngay
             BSP_Buzzer_On();     
             BSP_LED_Control(LED_COLOR_RED, LED_ON);    
             BSP_Pump_Start();
-            BSP_SetServoAngle(0); // Chốt cửa ngăn cháy lan
-            App_Send_Alert("WARNING: FIRE_DETECTED\r\n"); // Báo lên Server!    
+            BSP_SetServoAngle(0); // chốt cửa ngăn cháy lan
+            App_Send_Alert("WARNING: FIRE_DETECTED\r\n");  
             return;
             
         case RESET_SIG: 
+        //phòng trường hợp server gửi tín hiệu reset nhưng thực tế vẫn đang cháy hoặc rò gas
             if (BSP_GetFireStatus() == true || BSP_GetGasStatus() == true) {
                 return; 
             }
             Active_tran(me, State_IDLE); 
             return;
             
-        case EXIT_SIG:
+        case EXIT_SIG://thoát state alarm thì tắt hết các thiết bị
             BSP_Buzzer_Off();    
             BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
             BSP_Pump_Stop();     
             return;
             
-        case SIG_UART_RX_BYTE:
+        case UART_RX_SIG:
             App_Process_UART_Byte((uint8_t)e->param); 
             return;
         
@@ -189,7 +192,7 @@ static void State_Alarm(Active * const me, const Event * const e) {
             return;
     }
 }
-
+//mặc định khi khởi tạo sẽ vào state idle
 void App_AO_Init(void){
     Active_ctor(&App_AO, State_IDLE);
 }
