@@ -4,51 +4,49 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* --- 1. ĐỊNH NGHĨA TÍN HIỆU (SIGNALS) --- */
+// định nghĩa signals
 typedef enum {
-    INIT_SIG,       // Khởi tạo State
-    ENTRY_SIG,      // Vừa bước vào State
-    EXIT_SIG,       // Sắp thoát khỏi State
+    //tín hiệu hệ thống
+    INIT_SIG,       //khởi tạo state
+    ENTRY_SIG,      //vừa bước vào state
+    EXIT_SIG,       //sắp thoát khỏi state
     
-    // --- Các tín hiệu hệ thống của dự án ---
-    FIRE_DETECTED_SIG,
-    GAS_DETECTED_SIG,
-    TEMP_HIGH_SIG,
-    JOYSTICK_MOVED_SIG,
-    MODE_SWITCH_SIG,
-    RESET_SIG,
-    SIG_UART_RX_BYTE,
-    
-
-    UART_RX_SIG     // tín hiệu nhận của uart
+    //tín hiệu ứng dụng của dự án
+    FIRE_DETECTED_SIG,      //tín hiệu có cháy
+    GAS_DETECTED_SIG,       //tín hiệu rò gas
+    TEMP_HIGH_SIG,          //tín hiệu nhiệt độ tăng cao
+    JOYSTICK_MOVED_SIG,     //tín hiệu joystick chuyển động
+    MODE_SWITCH_SIG,        //tín hiệu đổi state
+    RESET_SIG,              //tín hiệu reset từ alarm về idle
+    UART_RX_SIG,       //tín hiệu nhận 1 byte uart qua esp8266
 } Signal;
 
-/* --- 2. CẤU TRÚC SỰ KIỆN (EVENT) --- */
+// struct Event
 typedef struct {
     Signal sig;
-    uint32_t param; // Tham số đi kèm (VD: chứa nhiệt độ 35 độ, hoặc góc servo)
+    uint32_t param; //tham số đi kèm (VD: chứa nhiệt độ 35 độ, hoặc góc servo)
 } Event;
 
-/* --- 3. KIỂU CON TRỎ HÀM TRẠNG THÁI --- */
-struct Active; // Khai báo trước (Forward declaration)
+/* KiỂU CON TRỎ HÀM TRẠNG THÁI */
+struct Active; //Forward declaration
 typedef void (*StateHandler)(struct Active * const me, const Event * const e);
 
-/* --- 4. HÀNG ĐỢI VÒNG (RING BUFFER) --- */
-#define QUEUE_SIZE 16 // Kích thước hàng đợi (phải là lũy thừa của 2 để tối ưu)
+/* HÀNG ĐỢI VÒNG (cấu trúc chính)*/
+#define QUEUE_SIZE 16 //kích thước hàng đợi (phải là lũy thừa của 2 để tối ưu)
 
 typedef struct Active {
-    StateHandler state;         // Trạng thái hiện tại
-    Event queue[QUEUE_SIZE];    // Mảng chứa sự kiện
-    uint8_t head;               // Con trỏ ghi (Push)
-    uint8_t tail;               // Con trỏ đọc (Pop)
-    uint8_t count;              // Số lượng sự kiện đang tồn đọng
+    StateHandler state;         //trạng thái hiện tại
+    Event queue[QUEUE_SIZE];    //mảng chứa các sự kiện
+    uint8_t head;               //con trỏ ghi (push event vào)
+    uint8_t tail;               //con trỏ đọc (pop event ra để xử lý)
+    uint8_t count;              //số lượng sự kiện đang tồn đọng
 } Active;
 
-/* --- 5. HÀM API GIAO TIẾP --- */
-void Active_ctor(Active * const me, StateHandler initial); // Hàm khởi tạo (Constructor)
-void Active_init(Active * const me);                       // Kích nổ State Machine
-void Active_post(Active * const me, Event e);              // Bỏ sự kiện vào hàng đợi (Dùng trong Ngắt)
-void Active_dispatch(Active * const me);                   // Lấy sự kiện ra xử lý (Dùng trong while 1)
-void Active_tran(Active * const me, StateHandler target);  // Chuyển trạng thái
+/* HÀM API GIAO TIẾP */
+void Active_ctor(Active * const me, StateHandler initial); // hàm khởi tạo (constructor)
+void Active_init(Active * const me);                       // kích nổ State Machine
+void Active_post(Active * const me, Event e);              // bỏ sự kiện vào hàng đợi (dùng trong Ngắt)
+void Active_dispatch(Active * const me);                   // lấy sự kiện ra xử lý (dùng trong while(1))
+void Active_tran(Active * const me, StateHandler target);  // chuyển trạng thái
 
 #endif // MICRO_AO_H

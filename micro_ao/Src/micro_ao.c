@@ -1,6 +1,7 @@
 #include "micro_ao.h"
+#include "main.h"  //để sử dụng irq trong thư viện
 
-// 1. Khởi tạo đối tượng
+//hàm khởi tạo
 void Active_ctor(Active * const me, StateHandler initial) {
     me->state = initial;
     me->head = 0;
@@ -8,54 +9,54 @@ void Active_ctor(Active * const me, StateHandler initial) {
     me->count = 0;
 }
 
-// 2. Kích nổ hệ thống (Tự động gọi INIT và ENTRY của state đầu tiên)
+//hàm kích nổ hệ thống (tự động gọi INIT và ENTRY của state đầu tiên)
 void Active_init(Active * const me) {
+    //khởi tạo các biến nội bộ
     Event init_e = { INIT_SIG, 0 };
     (*me->state)(me, &init_e);
-    
+    //khởi tạo phần cứng
     Event entry_e = { ENTRY_SIG, 0 };
     (*me->state)(me, &entry_e);
 }
 
-// 3. Hàm ném sự kiện vào Queue (Sẽ được gọi từ các hàm ngắt EXTI/UART)
+//hàm ném sự kiện vào Queue (sẽ được gọi từ các hàm ngắt EXTI/UART)
 void Active_post(Active * const me, Event e) {
+    //chỉ thêm event khi còn chỗ trong queue
     if (me->count < QUEUE_SIZE) {
         me->queue[me->head] = e;
-        me->head = (me->head + 1) % QUEUE_SIZE; // Quay vòng head
-        
-        // Lưu ý thực chiến: Trong hệ thống thật, việc cộng trừ count 
-        // đôi khi cần bọc trong __disable_irq() để tránh Race Condition.
+        me->head = (me->head + 1) % QUEUE_SIZE; //quay vòng head nếu tràn
+        //
         me->count++;
     }
 }
 
-// 4. Hàm tiêu hóa sự kiện (Đặt chết trong vòng lặp while(1) của main)
+//hàm xử lý sự kiện (đặt trong vòng lặp while(1) của main)
 void Active_dispatch(Active * const me) {
     if (me->count > 0) {
-        // Rút sự kiện từ vị trí tail
+        //rút sự kiện từ vị trí tail
         Event e = me->queue[me->tail];
-        me->tail = (me->tail + 1) % QUEUE_SIZE; // Quay vòng tail
+        me->tail = (me->tail + 1) % QUEUE_SIZE; //quay vòng tail nếu tràn
         
-        // Critical Section (Vùng găng): Đảm bảo trừ count an toàn
-        // __disable_irq(); 
+        // tránh lúc đang lấy event ra xử lý và cập nhật count thì bị ngắt chen ngang thay đổi count
+         __disable_irq(); //vô hiệu hoá ngắt (disable interrupt request)
         me->count--;
-        // __enable_irq();
+         __enable_irq(); //mở lại ngắt
 
-        // Giao sự kiện cho trạng thái hiện tại xử lý
+        //giao sự kiện cho trạng thái hiện tại xử lý
         (*me->state)(me, &e);
     }
 }
 
-// 5. Hàm chuyển trạng thái cực kỳ thông minh
+// hàm chuyển trạng thái 
 void Active_tran(Active * const me, StateHandler target) {
-    // A. Báo hiệu cho State CŨ dọn dẹp trước khi thoát
+    //báo hiệu cho state cũ dọn dẹp trước khi thoát
     Event exit_e = { EXIT_SIG, 0 };
     (*me->state)(me, &exit_e);
     
-    // B. Cập nhật con trỏ sang State MỚI
+    //cập nhật con trỏ sang State MỚI
     me->state = target;
     
-    // C. Báo hiệu cho State MỚI khởi tạo dữ liệu khi vừa bước vào
+    //báo hiệu cho state mới khởi tạo dữ liệu khi vừa bước vào
     Event entry_e = { ENTRY_SIG, 0 };
     (*me->state)(me, &entry_e);
 }
