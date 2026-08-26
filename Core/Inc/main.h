@@ -71,7 +71,7 @@ void Error_Handler(void);
 #define PUMP_RELAY_GPIO_Port GPIOB
 #define SW_MODE_Pin GPIO_PIN_1
 #define SW_MODE_GPIO_Port GPIOB
-#define BTN_RESET_Pin GPIO_PIN_2
+#define BTN_RESET_Pin GPIO_PIN_15
 #define BTN_RESET_GPIO_Port GPIOB
 #define LED_RED_Pin GPIO_PIN_12
 #define LED_RED_GPIO_Port GPIOB
@@ -81,6 +81,8 @@ void Error_Handler(void);
 #define LED_YELLOW_GPIO_Port GPIOB
 #define SERVO_PWM_Pin GPIO_PIN_6
 #define SERVO_PWM_GPIO_Port GPIOB
+#define BUZZER_Pin GPIO_PIN_11
+#define BUZZER_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

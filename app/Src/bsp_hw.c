@@ -24,13 +24,15 @@ static void DWT_Init(void) {
 }
 //hàm đọc tín hiệu lửa
 bool BSP_GetFireStatus(void){
-    if (HAL_GPIO_ReadPin(FIRE_SENSOR_GPIO_Port, FIRE_SENSOR_Pin) == GPIO_PIN_RESET)
+    //cảm biến HW-484 V0.2 mặc định là 0, có lửa là 1
+    if (HAL_GPIO_ReadPin(FIRE_SENSOR_GPIO_Port, FIRE_SENSOR_Pin) == GPIO_PIN_SET)
         return true;
-    else 
+    else
         return false;
 }
 //hàm đọc tín hiệu gas
 bool BSP_GetGasStatus(void){
+    
     if (HAL_GPIO_ReadPin(GAS_SENSOR_GPIO_Port, GAS_SENSOR_Pin) == GPIO_PIN_RESET)
         return true; 
     else 
@@ -53,7 +55,7 @@ void BSP_Init(void){
     //bật chế độ tự động đọc dữ liệu từ ADC đưa vào mảng
     HAL_ADC_Start_DMA(&hadc1, (uint32_t*)joystick_adc, 2); 
     //khởi động bộ phát xung PWM trên kênh 1 của Timer 4
-    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+    BSP_Servo_Start();
 }
 
 //hàm quy đổi toạ độ joystick sang %
@@ -168,12 +170,16 @@ void BSP_Pump_Stop(void){
 }
 //bật/tắt còi báo động
 void BSP_Buzzer_On(void){
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-}
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_SET);}
 void BSP_Buzzer_Off(void){
-    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);}
+//bật/tắt servo
+void BSP_Servo_Start(void){
+    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
 }
-
+void BSP_Servo_Stop(void){
+    HAL_TIM_PWM_Stop(&htim4, TIM_CHANNEL_1);
+}
 //bật/tắt 3 led
 void BSP_LED_Control(uint8_t color, uint8_t state){
     GPIO_PinState hal_state = (state == LED_ON) ? GPIO_PIN_SET : GPIO_PIN_RESET;
