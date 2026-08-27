@@ -2,13 +2,13 @@
 #include "app_main.h"
 #include "micro_ao.h"
 #include <stdbool.h>
-#include <string.h> // Dùng cho hàm strstr
+#include <string.h> //dùng cho hàm strstr
 #include <stdint.h>
-
+#include <stdio.h> //dùng cho sprintf
 /* ====================================================================
  * KHỞI TẠO STATE MACHINE
  * ==================================================================== */
-// đây là nơi cấp phát bộ nhớ thật sự cho App_AO (ative object)
+// đây là nơi cấp phát bộ nhớ thật sự cho App_AO 
 // File stm32f1xx_it.c sẽ gọi sang đây để xài ké biến này.
 
 Active App_AO; 
@@ -90,7 +90,8 @@ void App_Send_Alert(const char* message) {
 }
 
 static void State_IDLE(Active * const me, const Event * const e);
-static void State_Alarm(Active * const me, const Event * const e);
+static void State_Fire_Alarm(Active * const me, const Event * const e);
+static void State_Smoke_Alarm(Active * const me, const Event * const e);
 static void State_Manual(Active * const me, const Event * const e);
 
 /* ====================================================================
@@ -100,13 +101,30 @@ static void State_IDLE(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_GREEN, LED_ON); //state idle thì led green sáng
+            App_Send_Alert("STATE: IDLE\r\n");  
             return;
-        //gặp lửa hay gas thì qua state alarm
-        case FIRE_DETECTED_SIG:
-        case GAS_DETECTED_SIG: 
-            Active_tran(me, State_Alarm);
-            return;
+
+        case TEMP_HIGH_SIG:  //warning trước khi có cháy thật
+            uint8_t temp = (e->param >> 8) & 0xFF; 
+            uint8_t hum = e->param & 0xFF;
+
+            //dùng sprintf để nhét cả 2 số vào chuỗi, %% để in ra ký tự %
+            char alert_msg[64];
+            sprintf(alert_msg, "WARNING: OVERHEAT! TEMP = %u C, HUM = %u %%\r\n", temp, hum);
+            App_Send_Alert(alert_msg); // Gửi lên ESP8266
             
+            //chuyển sang trạng thái báo khói (chỉ hú còi, không xịt nước)
+            Active_tran(me, State_Smoke_Alarm); 
+            return;
+        
+        case FIRE_DETECTED_SIG: 
+            Active_tran(me, State_Fire_Alarm); //có lửa -> vào trạng thái Cháy
+            return; 
+
+        case GAS_DETECTED_SIG: 
+            Active_tran(me, State_Smoke_Alarm); //có khói -> vào trạng thái Khói
+            return;
+
         case MODE_SWITCH_SIG:
             Active_tran(me, State_Manual); 
             return;
@@ -132,6 +150,7 @@ static void State_Manual(Active * const me, const Event * const e) {
             return;
             
         case JOYSTICK_MOVED_SIG:
+            BSP_Servo_Start();
             BSP_SetServoAngle(e->param); 
             return;
             
@@ -139,13 +158,29 @@ static void State_Manual(Active * const me, const Event * const e) {
             Active_tran(me, State_IDLE); 
             return;
 
-        case FIRE_DETECTED_SIG:
+        case TEMP_HIGH_SIG:  //warning trước khi có cháy thật
+            uint8_t temp = (e->param >> 8) & 0xFF; 
+            uint8_t hum = e->param & 0xFF;
+
+            //dùng sprintf để nhét cả 2 số vào chuỗi, %% để in ra ký tự %
+            char alert_msg[64];
+            sprintf(alert_msg, "WARNING: OVERHEAT! TEMP = %u C, HUM = %u %%\r\n", temp, hum);
+            
+            //chuyển sang trạng thái báo khói (chỉ hú còi, không xịt nước)
+            Active_tran(me, State_Smoke_Alarm); 
+            return;
+
+        case FIRE_DETECTED_SIG: 
+            Active_tran(me, State_Fire_Alarm);
+            return;
+            
         case GAS_DETECTED_SIG: 
-            Active_tran(me, State_Alarm);
+            Active_tran(me, State_Smoke_Alarm);
             return;
             
         case EXIT_SIG:
             BSP_LED_Control(LED_COLOR_YELLOW, LED_OFF); 
+            BSP_Servo_Stop();
             return;
         
         case UART_RX_SIG:
@@ -157,36 +192,75 @@ static void State_Manual(Active * const me, const Event * const e) {
     }
 }
 
-static void State_Alarm(Active * const me, const Event * const e) {
-    //state alarm thì led red sáng
+static void State_Fire_Alarm(Active * const me, const Event * const e) {
     switch (e->sig) {
-        case ENTRY_SIG:
-        //vừa vào state alarm thì bật còi, đèn đỏ, máy bơm, chốt cửa (servo) ngăn cháy lan và gửi tín hiệu cảnh báo lên server ngay
-            BSP_Buzzer_On();     
+        case ENTRY_SIG:  
             BSP_LED_Control(LED_COLOR_RED, LED_ON);    
-            BSP_Pump_Start();
-            BSP_SetServoAngle(0); // chốt cửa ngăn cháy lan
+            BSP_Pump_Start();       //kích hoạt máy bơm nước dập lửa
+            BSP_Buzzer_On();    //còi
+            BSP_Servo_Start();
+            BSP_SetServoAngle(0);   //khóa cửa ngăn cháy lan
             App_Send_Alert("WARNING: FIRE_DETECTED\r\n");  
             return;
-            
+
+        case GAS_DETECTED_SIG: //nếu lửa hết rồi mà còn khói thì vẫn phải báo khói
+            Active_tran(me, State_Smoke_Alarm);
+            return;
+
         case RESET_SIG: 
-        //phòng trường hợp server gửi tín hiệu reset nhưng thực tế vẫn đang cháy hoặc rò gas
-            if (BSP_GetFireStatus() == true || BSP_GetGasStatus() == true) {
+            if (BSP_GetFireStatus() == true) { //vẫn còn lửa thì không cho reset
                 return; 
+            } 
+            if (BSP_GetGasStatus() == true) { //nếu tắt lửa rồi mà vẫn còn khói
+                Active_tran(me, State_Smoke_Alarm);
+                return;
             }
             Active_tran(me, State_IDLE); 
             return;
             
-        case EXIT_SIG://thoát state alarm thì tắt hết các thiết bị
-            BSP_Buzzer_Off();    
+        case EXIT_SIG:   
             BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
-            BSP_Pump_Stop();     
+            BSP_Pump_Stop();     //tắt máy bơm khi reset
+            BSP_Buzzer_Off();   //tắt còi
+            BSP_Servo_Stop();   //tắt servo
             return;
             
         case UART_RX_SIG:
             App_Process_UART_Byte((uint8_t)e->param); 
             return;
-        
+            
+        default:
+            return;
+    }
+}
+
+static void State_Smoke_Alarm(Active * const me, const Event * const e) {
+    switch (e->sig) {
+        case ENTRY_SIG:
+            BSP_LED_Control(LED_COLOR_RED, LED_ON);    
+            BSP_Buzzer_On();   //chỉ kích hoạt relay khói (còi hú), ko gọi lệnh bật bơm
+            App_Send_Alert("WARNING: SMOKE_DETECTED\r\n");  
+            return;
+
+        case FIRE_DETECTED_SIG: //đang có khói mà có lửa thì phải ưu tiên lửa 
+            Active_tran(me, State_Fire_Alarm); // Đang khói mà thấy lửa là chuyển thẳng sang bật bơm dập lửa!
+            return;
+
+        case RESET_SIG: 
+            if (BSP_GetGasStatus() == true) { //vẫn còn khói thì không cho reset
+                return; 
+            } 
+            Active_tran(me, State_IDLE); 
+            return;
+            
+        case EXIT_SIG:  
+            BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
+            BSP_Buzzer_Off();   //tắt còi
+            return;
+            
+        case UART_RX_SIG:
+            App_Process_UART_Byte((uint8_t)e->param); 
+            return;
             
         default:
             return;

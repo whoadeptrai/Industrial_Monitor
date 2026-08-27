@@ -34,5 +34,6 @@ void BSP_Pump_Stop(void);
 void BSP_LED_Control(uint8_t color, uint8_t state);
 void BSP_Buzzer_On(void);
 void BSP_Buzzer_Off(void);
-
+void BSP_Servo_Start(void);
+void BSP_Servo_Stop(void);
 #endif
