@@ -11,17 +11,10 @@ typedef enum {
     ENTRY_SIG,      //vừa bước vào state
     EXIT_SIG,       //sắp thoát khỏi state
     
-    // --- Các tín hiệu hệ thống của dự án ---
-    FIRE_DETECTED_SIG,
-    GAS_DETECTED_SIG,
-    TEMP_HIGH_SIG,
-    JOYSTICK_MOVED_SIG,
-    MODE_SWITCH_SIG,
-    RESET_SIG,
-    SIG_UART_RX_BYTE,
+
     
 
-    UART_RX_SIG     // tín hiệu nhận của uart
+
     //tín hiệu ứng dụng của dự án
     FIRE_DETECTED_SIG,      //tín hiệu có cháy
     GAS_DETECTED_SIG,       //tín hiệu rò gas
