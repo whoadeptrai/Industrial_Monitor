@@ -280,5 +280,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         HAL_UART_Receive_IT(huart, &rx_byte, 1);
     }
 }
-
+//hàm này tự động được HAL gọi khi phần cứng UART bị lỗi (overrun, noise, framing,...)
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART1) 
+        //tái khởi động lại quá trình nhận ngắt
+        HAL_UART_Receive_IT(huart, &rx_byte, 1);
+    
+}
 /* USER CODE END 1 */

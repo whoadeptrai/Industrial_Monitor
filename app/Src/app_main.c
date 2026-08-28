@@ -49,6 +49,14 @@ static char tx_buffer[128]; //bộ đệm riêng để chứa chuỗi gửi đi
 void App_Send_Alert(const char* message) {
     extern UART_HandleTypeDef huart1; 
     //copy message vào bộ đệm tĩnh để giữ dữ liệu sống sót khi thoát hàm
+    uint32_t start_tick=HAL_GetTick();
+    while (huart1.gState != HAL_UART_STATE_READY) {
+        if (HAL_GetTick() - start_tick > 100) //sau 100ms mà vẫn còn busy thì bỏ lệnh
+            //phần cứng UART bị treo (đứt dây, chạm chập)
+            //lập tức thoát hàm qua return, vứt bỏ lệnh gửi này để cứu CPU 
+            //quay lại làm nhiệm vụ quan trọng hơn (quét cảm biến cháy,gas,nhiệt độ).
+            return; 
+    }
     strncpy(tx_buffer, message, sizeof(tx_buffer) - 1);
     tx_buffer[sizeof(tx_buffer) - 1] = '\0'; 
     //yêu cầu phần cứng tự động gửi đi mà không bắt CPU phải đứng chờ
