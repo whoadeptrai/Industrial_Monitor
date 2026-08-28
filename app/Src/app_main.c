@@ -13,20 +13,11 @@
 
 Active App_AO; 
 
-
-/* ====================================================================
- * CÁC BIẾN CỤC BỘ CHO BỘ ĐỆM
- * ==================================================================== */
-#define MAX_CMD_LENGTH 64 //kích thước buffer chứa các ký tự đọc được
-static char rx_buffer[MAX_CMD_LENGTH]; //static khai báo các biến chỉ sử dụng trong file .c này -> tránh bị thay đổi bởi các file khác
-static uint16_t rx_index = 0;
-
-
 /* ====================================================================
  * HÀM PARSER BÓC TÁCH LỆNH VÀ RA QUYẾT ĐỊNH
  * ==================================================================== */
 //hàm này được gọi khi đã nhận đủ 1 câu lệnh từ ESP8266 (kết thúc bằng \n)
-static void ESP8266_ParseCommand(const char* cmd_str)
+void ESP8266_ParseCommand(const char* cmd_str)
 {
     // tìm chữ "ALARM_FIRE" trong chuỗi nhận được
     if (strstr(cmd_str, "ALARM_FIRE") != NULL) 
@@ -53,40 +44,15 @@ static void ESP8266_ParseCommand(const char* cmd_str)
         Active_post(&App_AO, evt); // chuyển đổi auto / manual từ xa
     }
 }
-
-/* ====================================================================
- * HÀM GHÉP BYTE (GỌI TỪ STATE MACHINE HOẶC VÒNG LẶP CHÍNH)
- * ==================================================================== */
-// hàm này có nhiệm vụ nhận từng byte lẻ tẻ do ngắt gửi tới và ghép thành chuỗi
-void App_Process_UART_Byte(uint8_t received_byte)
-{
-    //vượt quá kích thước buffer thì reset về 0
-    if (rx_index >= MAX_CMD_LENGTH - 1) 
-        rx_index = 0; 
-    
-
-    //kiểm tra xem ký tự nhận được có phải là Enter (kết thúc chuỗi) không
-    if (received_byte == '\n' || received_byte == '\r')
-    {
-        //chỉ xử lý nếu chuỗi có dữ liệu (lớn hơn 0)
-        if (rx_index > 0)
-        {
-            rx_buffer[rx_index] = '\0';       // kết thúc chuỗi
-            ESP8266_ParseCommand(rx_buffer);  // đưa chuỗi nguyên vẹn đi kiểm tra xem là tín hiệu gì
-            rx_index = 0;                     // reset con trỏ để chuẩn bị nhận câu lệnh mới
-        }
-    }
-    else//nếu là ký tự bình thường (A, B, C...), lưu vào mảng và tăng index
-    {
-        rx_buffer[rx_index] = (char)received_byte;
-        rx_index++;
-    }
-}
-
+static char tx_buffer[128]; //bộ đệm riêng để chứa chuỗi gửi đi
 //hàm gửi thông tin lên esp8266
 void App_Send_Alert(const char* message) {
     extern UART_HandleTypeDef huart1; 
-    HAL_UART_Transmit(&huart1, (uint8_t*)message, strlen(message), 100);
+    //copy message vào bộ đệm tĩnh để giữ dữ liệu sống sót khi thoát hàm
+    strncpy(tx_buffer, message, sizeof(tx_buffer) - 1);
+    tx_buffer[sizeof(tx_buffer) - 1] = '\0'; 
+    //yêu cầu phần cứng tự động gửi đi mà không bắt CPU phải đứng chờ
+    HAL_UART_Transmit_IT(&huart1, (uint8_t*)tx_buffer, strlen(tx_buffer));
 }
 
 static void State_IDLE(Active * const me, const Event * const e);
@@ -111,7 +77,7 @@ static void State_IDLE(Active * const me, const Event * const e) {
             //dùng sprintf để nhét cả 2 số vào chuỗi, %% để in ra ký tự %
             char alert_msg[64];
             sprintf(alert_msg, "WARNING: OVERHEAT! TEMP = %u C, HUM = %u %%\r\n", temp, hum);
-            App_Send_Alert(alert_msg); // Gửi lên ESP8266
+            App_Send_Alert(alert_msg); //gửi lên ESP8266
             
             //chuyển sang trạng thái báo khói (chỉ hú còi, không xịt nước)
             Active_tran(me, State_Smoke_Alarm); 
@@ -131,10 +97,6 @@ static void State_IDLE(Active * const me, const Event * const e) {
             
         case EXIT_SIG:
             BSP_LED_Control(LED_COLOR_GREEN, LED_OFF); 
-            return;
-        
-        case UART_RX_SIG: //dù ở state nào thì vẫn phải gửi thông báo nếu nhận được tín hiệu UART_RX_SIG
-            App_Process_UART_Byte((uint8_t)e->param); 
             return;
             
         default:
@@ -182,10 +144,6 @@ static void State_Manual(Active * const me, const Event * const e) {
             BSP_LED_Control(LED_COLOR_YELLOW, LED_OFF); 
             BSP_Servo_Stop();
             return;
-        
-        case UART_RX_SIG:
-            App_Process_UART_Byte((uint8_t)e->param); 
-            return;
             
         default:
             return;
@@ -224,11 +182,7 @@ static void State_Fire_Alarm(Active * const me, const Event * const e) {
             BSP_Buzzer_Off();   //tắt còi
             BSP_Servo_Stop();   //tắt servo
             return;
-            
-        case UART_RX_SIG:
-            App_Process_UART_Byte((uint8_t)e->param); 
-            return;
-            
+
         default:
             return;
     }
@@ -256,10 +210,6 @@ static void State_Smoke_Alarm(Active * const me, const Event * const e) {
         case EXIT_SIG:  
             BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
             BSP_Buzzer_Off();   //tắt còi
-            return;
-            
-        case UART_RX_SIG:
-            App_Process_UART_Byte((uint8_t)e->param); 
             return;
             
         default:
