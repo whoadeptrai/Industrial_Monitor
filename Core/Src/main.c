@@ -116,10 +116,7 @@ int main(void)
 
   HAL_UART_Receive_IT(&huart1, &rx_byte, 1); //gọi trước lần đầu tiên bên ngoài ngắt
 
-  // 3. Khai báo biến lưu trạng thái cũ để bắt sườn (Fix Bug 2)
-  bool last_fire = false;
-  bool last_gas = false;
-  uint32_t last_poll_time = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -201,7 +198,7 @@ int main(void)
     Active_dispatch(&App_AO);
   }
   /* USER CODE END 3 */
-
+}
 
 /**
   * @brief System Clock Configuration
@@ -283,4 +280,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-}
