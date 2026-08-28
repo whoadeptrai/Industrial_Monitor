@@ -27,8 +27,7 @@ if %errorlevel% neq 0 (
 :: BƯỚC 3: NẠP CODE XUỐNG CHIP (Sử dụng đúng Serial Number mạch nạp của m)
 echo.
 echo STEP 3: FLASHING FIRMWARE TO TARGET MCU...
-STM32_Programmer_CLI -c port=SWD sn=34FF6B064248323545531157 -w build/Industrial_Monitor.elf -rst
-
+STM32_Programmer_CLI -c port=SWD -w build/Industrial_Monitor.elf -rst
 echo.
 echo =========================================
 echo       DONE! MCU IS RUNNING.
