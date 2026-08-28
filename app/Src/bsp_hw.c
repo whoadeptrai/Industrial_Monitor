@@ -35,21 +35,20 @@ void BSP_Init(void){
 
 // (Hàm BSP_GetJoystickXY giữ nguyên vì Rank 1 và Rank 2 vẫn ở adc_buffer[0] và [1])
 
-// 2. Thuật toán giám sát Cảm biến Lửa
+//đọc tín hiệu cảm biến Lửa
 bool BSP_GetFireStatus(void){
     uint16_t fire_adc = adc_buffer[2]; // Rank 3 
     
-    // Vùng 1: Lỗi phần cứng (Đứt dây, mất nguồn) -> Điện áp gần 0V
-    if (fire_adc < 100) {
-        extern void App_Send_Alert(const char* message);
+    //case 1: lỗi phần cứng (đứt dây, mất nguồn) -> điện áp gần 0V
+    if (fire_adc < 100) {   //(100 / 4095)*3.3V ~ 0.08V phòng hờ nhiễu điện từ làm cho V khác 0V
+        extern void App_Send_Alert(const char* message); // gửi mess lên server
         App_Send_Alert("ERROR: FIRE SENSOR DISCONNECTED\r\n");
         return false; 
     }
-    // Vùng 2: Có cháy -> Hồng ngoại mạnh làm điện áp tăng vọt
-    else if (fire_adc > 2500) {
+    //case 2: có cháy -> hồng ngoại mạnh làm điện áp tăng vọt
+    else if (fire_adc > 2500) //cỡ 2V
         return true; 
-    }
-    // Vùng 3: An toàn
+    //case 3: An toàn
     return false;
 }
 
@@ -57,17 +56,17 @@ bool BSP_GetFireStatus(void){
 bool BSP_GetGasStatus(void){
     uint16_t gas_adc = adc_buffer[3]; // Rank 4
     
-    // Vùng 1: Đứt dây
-    if (gas_adc < 100) {
-        extern void App_Send_Alert(const char* message);
+    // case 1: lỗi phần cứng
+    if (gas_adc < 100) {    //(100 / 4095)*3.3V ~ 0.08V phòng hờ nhiễu điện từ làm cho V khác 0V
+        extern void App_Send_Alert(const char* message); //gửi mess lên server
         App_Send_Alert("ERROR: GAS SENSOR DISCONNECTED\r\n");
         return false; 
     }
-    // Vùng 2: Khói/gas làm giảm điện trở màng SnO2, đẩy điện áp A0 lên cao
-    else if (gas_adc > 2800) { 
+    // case 2: khói/gas làm giảm điện trở màng SnO2, đẩy điện áp A0 lên cao
+    else if (gas_adc > 2800) { //cỡ 2.25V
         return true; 
     }
-    // Vùng 3: An toàn
+    // case 3: an toàn
     return false;
 }
 //hàm thiết lập góc servo
