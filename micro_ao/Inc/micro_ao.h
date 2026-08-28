@@ -22,7 +22,6 @@ typedef enum {
     JOYSTICK_MOVED_SIG,     //tín hiệu joystick chuyển động
     MODE_SWITCH_SIG,        //tín hiệu đổi state
     RESET_SIG,              //tín hiệu reset từ alarm về idle
-    UART_RX_SIG,       //tín hiệu nhận 1 byte uart qua esp8266
 } Signal;
 
 // struct Event
@@ -36,7 +35,7 @@ struct Active; //Forward declaration
 typedef void (*StateHandler)(struct Active * const me, const Event * const e);
 
 /* HÀNG ĐỢI VÒNG (cấu trúc chính)*/
-#define QUEUE_SIZE 16 //kích thước hàng đợi (phải là lũy thừa của 2 để tối ưu)
+#define QUEUE_SIZE 64 //kích thước hàng đợi (phải là lũy thừa của 2 để tối ưu)
 
 typedef struct Active {
     StateHandler state;         //trạng thái hiện tại
