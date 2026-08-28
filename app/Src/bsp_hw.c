@@ -22,21 +22,53 @@ static void DWT_Init(void) {
         dwt_initialized = true; //chỉ init một lần trong while(1)
     }
 }
-//hàm đọc tín hiệu lửa
-bool BSP_GetFireStatus(void){
-    //cảm biến HW-484 V0.2 mặc định là 0, có lửa là 1
-    if (HAL_GPIO_ReadPin(FIRE_SENSOR_GPIO_Port, FIRE_SENSOR_Pin) == GPIO_PIN_SET)
-        return true;
-    else
-        return false;
+// 1. Nâng cấp mảng DMA từ 2 lên 4 phần tử
+static volatile uint16_t adc_buffer[4]; 
+extern ADC_HandleTypeDef hadc1;
+
+void BSP_Init(void){
+    // Báo cho DMA biết bây giờ phải bơm 4 giá trị liên tục vào mảng
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 4); 
+    //khởi động bộ phát xung PWM trên kênh 1 của Timer 4
+    BSP_Servo_Start();
 }
-//hàm đọc tín hiệu gas
-bool BSP_GetGasStatus(void){
+
+// (Hàm BSP_GetJoystickXY giữ nguyên vì Rank 1 và Rank 2 vẫn ở adc_buffer[0] và [1])
+
+// 2. Thuật toán giám sát Cảm biến Lửa
+bool BSP_GetFireStatus(void){
+    uint16_t fire_adc = adc_buffer[2]; // Rank 3 
     
-    if (HAL_GPIO_ReadPin(GAS_SENSOR_GPIO_Port, GAS_SENSOR_Pin) == GPIO_PIN_RESET)
+    // Vùng 1: Lỗi phần cứng (Đứt dây, mất nguồn) -> Điện áp gần 0V
+    if (fire_adc < 100) {
+        extern void App_Send_Alert(const char* message);
+        App_Send_Alert("ERROR: FIRE SENSOR DISCONNECTED\r\n");
+        return false; 
+    }
+    // Vùng 2: Có cháy -> Hồng ngoại mạnh làm điện áp tăng vọt
+    else if (fire_adc > 2500) {
         return true; 
-    else 
-        return false;
+    }
+    // Vùng 3: An toàn
+    return false;
+}
+
+// 3. Thuật toán giám sát Cảm biến Gas MQ-2
+bool BSP_GetGasStatus(void){
+    uint16_t gas_adc = adc_buffer[3]; // Rank 4
+    
+    // Vùng 1: Đứt dây
+    if (gas_adc < 100) {
+        extern void App_Send_Alert(const char* message);
+        App_Send_Alert("ERROR: GAS SENSOR DISCONNECTED\r\n");
+        return false; 
+    }
+    // Vùng 2: Khói/gas làm giảm điện trở màng SnO2, đẩy điện áp A0 lên cao
+    else if (gas_adc > 2800) { 
+        return true; 
+    }
+    // Vùng 3: An toàn
+    return false;
 }
 //hàm thiết lập góc servo
 void BSP_SetServoAngle(uint8_t angle){
@@ -48,26 +80,22 @@ void BSP_SetServoAngle(uint8_t angle){
     __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, ccr_value);//timer4 chu kỳ 50ms
 }
 
-static volatile uint16_t joystick_adc[2];
 extern ADC_HandleTypeDef hadc1;
-
-void BSP_Init(void){
-    //bật chế độ tự động đọc dữ liệu từ ADC đưa vào mảng
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)joystick_adc, 2); 
-    //khởi động bộ phát xung PWM trên kênh 1 của Timer 4
-    BSP_Servo_Start();
-}
 
 //hàm quy đổi toạ độ joystick sang %
 void BSP_GetJoystickXY(int8_t* x, int8_t* y){
     int32_t raw_x, raw_y;
-    raw_x = joystick_adc[0];
-    raw_y = joystick_adc[1];
+    //rút dữ liệu từ mảng DMA chung (Rank 1 và Rank 2)
+    raw_x = adc_buffer[0]; 
+    raw_y = adc_buffer[1]; 
+    
     int8_t percent_x = (int8_t)(((raw_x - 2048)*100)/2048);
     int8_t percent_y = (int8_t)(((raw_y - 2048)*100)/2048);
+    
     //hạn chế dội
     if (percent_x <= 5 && percent_x >= -5) percent_x = 0;
     if (percent_y <= 5 && percent_y >= -5) percent_y = 0;
+    
     //cập nhật kết quả quy đổi
     if (x != NULL) *x = percent_x;
     if (y != NULL) *y = percent_y;

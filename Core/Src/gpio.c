@@ -55,16 +55,9 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, PUMP_RELAY_Pin|BUZZER_Pin|LED_RED_Pin|LED_GREEN_Pin|LED_YELLOW_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : FIRE_SENSOR_Pin */
-  GPIO_InitStruct.Pin = FIRE_SENSOR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN; 
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : GAS_SENSOR_Pin */
-  GPIO_InitStruct.Pin = GAS_SENSOR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING; 
-  GPIO_InitStruct.Pull = GPIO_PULLUP; 
+  /*Configure GPIO pins : FIRE_SENSOR_Pin GAS_SENSOR_Pin as Analog */
+  GPIO_InitStruct.Pin = FIRE_SENSOR_Pin | GAS_SENSOR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DHT11_PIN_Pin */
