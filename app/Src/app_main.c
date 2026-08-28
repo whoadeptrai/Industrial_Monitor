@@ -117,6 +117,7 @@ static void State_Manual(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_YELLOW, LED_ON); 
+            App_Send_Alert("STATE: MANUAL\r\n");  
             return;
             
         case JOYSTICK_MOVED_SIG:
