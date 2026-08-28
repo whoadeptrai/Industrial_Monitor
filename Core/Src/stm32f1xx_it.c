@@ -246,21 +246,37 @@ void USART1_IRQHandler(void)
 
 /* USER CODE BEGIN 1 */
 
-extern Active App_AO; // nằm ở app_main.c
-//biến toàn cục hứng byte
-uint8_t rx_byte; 
+extern Active App_AO; //định nghãi bên app_main.c
+uint8_t rx_byte; //biến lưu trữ từng byte dữ liệu
+
+//các biến cho buffer chuỗi
+#define MAX_CMD_LENGTH 64
+static char rx_buffer[MAX_CMD_LENGTH];
+static uint16_t rx_index = 0;
+
+//hàm định nghĩa bên app_main.c
+extern void ESP8266_ParseCommand(const char* cmd_str);
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart==&huart1)
+    if (huart->Instance == USART1)
     {
-        Event evt;
-        evt.sig = UART_RX_SIG;  // tín hiệu nhận 
-        evt.param = rx_byte;     // thông tin nhận được
-
-        // truyền con trỏ bộ máy &App_AO, và truyền sự kiện evt
-        Active_post(&App_AO, evt);  // đưa dữ liệu nhận được vào hàng đợi vòng
-
-        // chờ nhận byte tiếp theo
+        //nếu nhận được dấu enter (kết thúc lệnh)
+        if (rx_byte == '\n' || rx_byte == '\r') {
+            if (rx_index > 0) {
+                rx_buffer[rx_index] = '\0'; // Đóng chuỗi
+                //gọi thẳng hàm Parse, sẽ tự tạo Event và ném vào App_AO
+                ESP8266_ParseCommand(rx_buffer); 
+                rx_index = 0; //reset để đón lệnh tiếp theo
+            }
+        } 
+        else {//nếu là ký tự bình thường thì nhét vào mảng
+            if (rx_index < MAX_CMD_LENGTH - 1)
+                rx_buffer[rx_index++] = (char)rx_byte;
+            else
+                rx_index = 0; //tràn mảng thì reset
+        }
+        //chờ nhận ký tự tiếp theo
         HAL_UART_Receive_IT(huart, &rx_byte, 1);
     }
 }
