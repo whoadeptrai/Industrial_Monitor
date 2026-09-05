@@ -83,6 +83,8 @@ static void State_IDLE(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_GREEN, LED_ON); //state idle thì led green sáng
+            BSP_Servo_Start();       // Đảm bảo Timer phát xung
+            BSP_SetServoAngle(180);
             App_Send_Alert("STATE: IDLE\r\n");  
             return;
 
@@ -125,7 +127,8 @@ static void State_Manual(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_YELLOW, LED_ON); 
-            App_Send_Alert("STATE: MANUAL\r\n");  
+            BSP_Servo_Stop();
+            App_Send_Alert("STATE: MANUAL\r\n");
             return;
             
         case JOYSTICK_MOVED_SIG:
@@ -179,7 +182,27 @@ static void State_Fire_Alarm(Active * const me, const Event * const e) {
             return;
 
         case GAS_DETECTED_SIG: //nếu lửa hết rồi mà còn khói thì vẫn phải báo khói
-            Active_tran(me, State_Smoke_Alarm);
+            if (BSP_GetFireStatus() == true) {
+                // Giữ nguyên trạng thái Cháy -> Máy bơm và còi tiếp tục hoạt động 100%
+                // Gửi thêm thông báo có khói để app Blynk sáng đèn báo khói
+            
+                    App_Send_Alert("WARNING: SMOKE_DETECTED\r\n");
+                
+            
+            } 
+            // 2. NẾU ĐÃ HẾT LỬA (nhưng môi trường vẫn còn khói/gas):
+            else {
+                // Tự động chuyển về báo khói: EXIT_SIG sẽ tự tắt bơm, chỉ giữ còi hú
+                Active_tran(me, State_Smoke_Alarm);
+            }
+                return;
+
+        case FIRE_DETECTED_SIG:
+            // FIX LỖI 2: Đang cháy mà trước đó đã báo khói, giờ cắm lại dây khói (hết khói)
+            if (BSP_GetGasStatus() == false) {
+                App_Send_Alert("CLEAR: SMOKE_OFF\r\n"); // Tắt đèn khói trên Blynk
+                
+            }
             return;
 
         case RESET_SIG: 
@@ -197,7 +220,7 @@ static void State_Fire_Alarm(Active * const me, const Event * const e) {
             BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
             BSP_Pump_Stop();     //tắt máy bơm khi reset
             BSP_Buzzer_Off();   //tắt còi
-            BSP_Servo_Stop();   //tắt servo
+            App_Send_Alert("CLEAR: FIRE_OFF\r\n");
             return;
 
         default:
@@ -209,7 +232,10 @@ static void State_Smoke_Alarm(Active * const me, const Event * const e) {
     switch (e->sig) {
         case ENTRY_SIG:
             BSP_LED_Control(LED_COLOR_RED, LED_ON);    
+            BSP_Servo_Start();
+            BSP_SetServoAngle(0);   //khóa cửa ngăn cháy lan
             BSP_Buzzer_On();   //chỉ kích hoạt relay khói (còi hú), ko gọi lệnh bật bơm
+            App_Send_Alert("CLEAR: FIRE_OFF\r\n");
             App_Send_Alert("WARNING: SMOKE_DETECTED\r\n");  
             return;
 
@@ -227,7 +253,11 @@ static void State_Smoke_Alarm(Active * const me, const Event * const e) {
         case EXIT_SIG:  
             BSP_LED_Control(LED_COLOR_RED, LED_OFF);   
             BSP_Buzzer_Off();   //tắt còi
+            if (BSP_GetGasStatus() == false) {
+                App_Send_Alert("CLEAR: SMOKE_OFF\r\n");
+            }
             return;
+
             
         default:
             return;

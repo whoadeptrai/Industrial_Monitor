@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 #include "app_main.h"
 #include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +50,7 @@
 
 /* USER CODE BEGIN PV */
 extern uint8_t rx_byte;
+extern void App_Send_Alert(char* msg);
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,21 +128,25 @@ int main(void)
     if (HAL_GetTick() - last_poll_time >= 50) {
       last_poll_time = HAL_GetTick(); //cập nhật lại mốc thời gian
 
-      //quét cảm biến lửa
       bool current_fire = BSP_GetFireStatus();
       if (current_fire == true && last_fire == false) { 
-          Event e; 
-          e.sig = FIRE_DETECTED_SIG;
-          Active_post(&App_AO, e); //chỉ chỉ gửi event cháy đúng 1 lần lúc lửa mới bùng lên
+          Event e = { .sig = FIRE_DETECTED_SIG, .param = 0 }; 
+          Active_post(&App_AO, e); // Kích hoạt sự kiện có cháy
       }
-      last_fire = current_fire; //lưu lại để vòng sau so sánh
+      last_fire = current_fire;
 
-      //quét cảm biến gas
+      // 2. Quét cảm biến gas
       bool current_gas = BSP_GetGasStatus();
-      if (current_gas == true && last_gas == false) {
-          Event e; 
-          e.sig = GAS_DETECTED_SIG;
-          Active_post(&App_AO, e); //chỉ gửi event gas đúng 1 lần lúc phát hiện rò gas
+      if (current_gas == true && last_gas == false) { 
+          // Cạnh lên: Bắt đầu phát hiện có khói/gas
+          Event e = { .sig = GAS_DETECTED_SIG, .param = 0 }; 
+          Active_post(&App_AO, e); 
+      }
+      else if (current_gas == false && last_gas == true) {
+          // Cạnh xuống: Cắm lại dây khói (hết khói) trong lúc vẫn còn cháy
+          if (BSP_GetFireStatus() == true) {
+              App_Send_Alert("CLEAR: SMOKE_OFF\r\n"); // Tắt ngay đèn khói trên Blynk
+          }
       }
       last_gas = current_gas;
 
@@ -185,6 +191,9 @@ int main(void)
           
           uint8_t temp = 0, hum = 0;
           if (BSP_ReadDHT11(&temp, &hum) == 1) { //nếu đọc thành công
+            char data_msg[64];
+              sprintf(data_msg, "DATA: TEMP = %u, HUM = %u\r\n", temp, hum);
+              App_Send_Alert(data_msg);
               if (temp > 45) { //khi nhiệt độ quá cao
                   Event e;
                   e.sig = TEMP_HIGH_SIG; //gửi tín hiệu warning sắp có cháy
